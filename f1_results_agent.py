@@ -117,7 +117,8 @@ python_repl_ast: A Python shell. Use this to execute python commands. Input shou
 '''
 
 load_dotenv()
-openai_api_key = os.environ["OPENAI_API_KEY"]
+# openai_api_key = os.environ["OPENAI_API_KEY"]
+openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 llm = ChatOpenAI(
     temperature=0, model="gpt-3.5-turbo-0613", openai_api_key=openai_api_key, streaming=True
 )
