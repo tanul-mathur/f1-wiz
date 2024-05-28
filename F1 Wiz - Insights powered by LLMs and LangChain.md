@@ -1,6 +1,6 @@
 # F1 Wiz : Insights powered by LLMs and LangChain
 
-![The Red Bull RB19!](rb19.png)
+![The Red Bull RB19!](red_bull_midjourney.png)
 
 Intrigued by the electrifying world of Formula One, my journey into the realm of F1 data analysis began with an unexpected catalyst. Yep, you guessed it – It all started with a Netflix series 'Drive to Survive’. I soon realised that F1 is more than just a sport; it's a crazy mix of human performance at its peak and mind-boggling engineering and Tech wizardry.
 
