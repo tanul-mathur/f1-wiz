@@ -12,6 +12,9 @@ from langchain.agents import create_pandas_dataframe_agent
 from langchain.callbacks import StreamlitCallbackHandler
 from langchain.chat_models import ChatOpenAI
 
+# import butler.get_agent as get_agent
+from utils.butler import get_agent
+
 ######## INITIAL SETUP
 
 # Enable the cache
@@ -23,14 +26,25 @@ st.set_page_config(page_title='🏁 F1 Wiz 🧙',
                    layout = 'wide')
 st.title('🏎️💨💨  :red[F1 Wiz] 🧙')
 st.write('### Ask questions about any Formula 1 session !!')
-st.image("https://media.giphy.com/media/MovqJSMROh1gA/giphy.gif", use_column_width = True)
+# left_co, cent_co,last_co = st.columns(3)
+# with cent_co:
+st.image("https://media1.tenor.com/m/RtrDuGASCoMAAAAd/f1.gif", use_column_width = True)
 
 # https://media.giphy.com/media/1QjxtwZ9LoPD2Jlcuq/giphy.gif
 # https://media.giphy.com/media/cC9Ue0I59m5NEJTlMH/giphy.gif
+# https://media.giphy.com/media/MovqJSMROh1gA/giphy.gif
+
+###### INITIATE SIDEBAR AND ASK FOR OPENAI API KEY 
+with st.sidebar:
+    # openai_api_key = st.text_input("OpenAI API Key", type="password")
+    "[Get an OpenAI API key](https://platform.openai.com/api-keys)"
+    "[View the source code](https://github.com/tanul-mathur/f1-wiz/blob/main/f1_results_agent.py)"
 
 ###### SELECTION OPTIONS 
 with st.container():
-    st.write('### Select Session details :')
+    st.write('#### Enter your OpenAI API Key :')
+    openai_api_key = st.text_input("OpenAI API Key", type="password")
+    st.write('#### Select Session details :')
     col1, col2, col3 = st.columns(3)
 
     year = col1.selectbox('Year',list(range(2019, datetime.date.today().year+1)))
@@ -46,109 +60,70 @@ with st.container():
 
     session_name = col3.selectbox('Session', ['Practice 1', 'Practice 2', 'Practice 3', 'Sprint', 'Sprint Shootout', 'Qualifying', 'Race'])
 
-# go_button = st.button('Lights Out and Away we Go!!')
+    go_button = st.button('Go!')
+    
+    if 'go_clicked' not in st.session_state.keys():
+            st.session_state['go_clicked'] = False
+
 # on click
-# if go_button:
+if go_button | st.session_state['go_clicked']:
+    
+    if not openai_api_key.startswith('sk-'):
+        st.warning('Please enter your OpenAI API key!', icon='⚠')
+        st.stop()
+    if openai_api_key.startswith('sk-'):
 
-####### LOAD THE APP
-session = ff1.get_session(year, event_name, session_name)
-session.load()
+        st.session_state['go_clicked'] = True
 
-st.write(f"### You selected the :red[{event_name}] :red[{year}], Session : {session_name}")
+        ####### LOAD THE APP
+        session = ff1.get_session(year, event_name, session_name)
+        session.load()
 
-results_df = session.results
-# all_laps = session.laps
+        st.write(f"### You selected the :red[{event_name}] :red[{year}], Session : {session_name}")
 
-st.write('The table provides driver and result information for all drivers that participated in a session.')
-with st.expander("See summary of the referenced table"):
-    st.write("## Results table")
-    st.write(results_df.head())
+        results_df = session.results
+        filtered_df = results_df.loc[:,['TeamName','FullName','CountryCode','Position','ClassifiedPosition','GridPosition','Q1','Q2','Q3','Time','Status','Points']]
+        # all_laps = session.laps
 
-data_schema = '''
-The 'results_df' dataframe provides driver and result information for all drivers that participated in a session. By default, the session results are indexed by driver number and sorted by finishing position.
+        st.write('The table provides driver and result information for all drivers that participated in a session.')
+        with st.expander("See summary of the referenced table"):
+            st.write("## Results table")
+            st.write(filtered_df.head())
 
-Column descriptions : 
+        # INITIATE AGENT
+        pandas_df_agent = get_agent(openai_api_key, df = results_df)
 
-DriverNumber | str | The number associated with this driver in this session (usually the drivers permanent number)
+        # Initialize the chat messages history
+        if "messages" not in st.session_state.keys(): 
+            st.session_state.messages = [
+                {"role": "assistant", "content": "Hello! How can I help?"}
+            ]
+        # Display the prior chat messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
 
-BroadcastName | str | First letter of the drivers first name plus the drivers full last name in all capital letters. (e.g. 'P GASLY')
+        # User input area
+        prompt = st.chat_input("Your question")
+        # if st.button("Send"): 
+        if prompt: # Ensure the prompt is not empty
+            st.session_state.messages = [{"role": "user", "content": prompt}]
+            # Save user input to chat history
+            # st.session_state.messages.append({"role": "user", "content": prompt})
+            
+            # Display the updated chat messages
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
 
-FullName | str | The drivers full name (e.g. “Pierre Gasly”)
+            # If the last message is from the user, generate a new response from the assistant
+            if st.session_state.messages[-1]["role"] == "user":
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
+                        response = pandas_df_agent.run(st.session_state.messages, callbacks=[st_cb])
+                        st.write(response)
+                        # Save assistant response to chat history
+                        message = {"role": "assistant", "content": response}
+                            # st.session_state.messages.append({"role": "assistant", "content": response})
 
-Abbreviation | str | The drivers three letter abbreviation (e.g. “GAS”)
-
-DriverId | str | driverId that is used by the Ergast API
-
-TeamName | str | The team name (short version without title sponsors)
-
-TeamColor | str | The color commonly associated with this team (hex value)
-
-TeamId | str | constructorId that is used by the Ergast API
-
-FirstName | str | The drivers first name
-
-LastName | str | The drivers last name
-
-HeadshotUrl | str | The URL to the driver's headshot
-
-CountryCode | str | The driver's country code (e.g. “FRA”)
-
-Position | float | The drivers finishing position (values only given if session is 'Race', 'Qualifying', 'Sprint Shootout', 'Sprint', or 'Sprint Qualifying').
-
-ClassifiedPosition | str | The official classification result for each driver. This is either an integer value if the driver is officially classified or one of “R” (retired), “D” (disqualified), “E” (excluded), “W” (withdrawn), “F” (failed to qualify) or “N” (not classified).
-
-GridPosition | float | The drivers starting position (values only given if session is 'Race', 'Sprint', or 'Sprint Qualifying')
-
-Time | pd.Timedelta | The drivers total race time (values only given if session is 'Race', 'Sprint', or 'Sprint Qualifying' and the driver was not more than one lap behind the leader)
-
-Status | str | A status message to indicate if and how the driver finished the race or to indicate the cause of a DNF. Possible values include but are not limited to ‘Finished’, ‘+ 1 Lap’, ‘Crash’, ‘Gearbox’, … (values only given if session is ‘Race’, ‘Sprint’, or ‘Sprint Qualifying’)
-
-Points | float | The number of points received by each driver for their finishing result.
-'''
-
-
-prefix_prompt = f'''You are working with pandas dataframes in Python that contain Formula One race results and lap details. The dataframe is called 'df'.
-{data_schema} 
-You are an expert in Formula One and know all about the sport.
-
-You should use the tools below to answer the question posed of you:
-
-python_repl_ast: A Python shell. Use this to execute python commands. Input should be a valid python command. When using this tool, sometimes output is abbreviated - make sure it does not look abbreviated before using it in your answer. Install all required libraries.
-'''
-
-load_dotenv()
-# openai_api_key = os.environ["OPENAI_API_KEY"]
-openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-llm = ChatOpenAI(
-    temperature=0, model="gpt-3.5-turbo-0613", openai_api_key=openai_api_key, streaming=True
-)
-
-pandas_df_agent = create_pandas_dataframe_agent(
-    llm,
-    df = results_df,
-    verbose=True,
-    agent_type=AgentType.OPENAI_FUNCTIONS,
-    handle_parsing_errors=True
-    ,prefix = prefix_prompt
-)
-
-if "messages" not in st.session_state.keys(): # Initialize the chat messages history
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Ask me a question about Formula One!"}
-    ]
-
-if prompt := st.chat_input("Your question"): # Prompt for user input and save to chat history
-    st.session_state.messages = [{"role": "user", "content": prompt}]
-
-for message in st.session_state.messages: # Display the prior chat messages
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
-
-# If last message is not from assistant, generate a new response
-if st.session_state.messages[-1]["role"] != "assistant":
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
-            response = pandas_df_agent.run(st.session_state.messages, callbacks=[st_cb])
-            st.write(response)
-            message = {"role": "assistant", "content": response}
