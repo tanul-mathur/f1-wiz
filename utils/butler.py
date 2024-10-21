@@ -62,7 +62,7 @@ You should use the tools below to answer the question posed of you:
 
 python_repl_ast: A Python shell. Use this to execute python commands. Input should be a valid python command. When using this tool, sometimes output is abbreviated - make sure it does not look abbreviated before using it in your answer. Install all required libraries.
 '''
-def get_agent(openai_api_key, df, model = "gpt-3.5-turbo-0613", prefix_prompt = prefix_prompt):
+def get_agent(openai_api_key, df, model = "gpt-4-turbo", prefix_prompt = prefix_prompt):
     '''
     [ARGS]
     open_api_key    : OpenAI API key
